@@ -1,5 +1,6 @@
 """
-Procesador de documentos PDF para APU - CORREGIDO
+Procesador de documentos PDF para APU
+Con capacidades avanzadas de extracción, chunking y metadata
 """
 import os
 from pathlib import Path

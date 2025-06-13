@@ -1,5 +1,5 @@
 """
-Memory manager for APU conversations
+Controla la memoria de las conversaciones y gestiona las sesiones.
 """
 import json
 from datetime import datetime

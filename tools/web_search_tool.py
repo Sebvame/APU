@@ -1,5 +1,5 @@
 """
-Herramienta de búsqueda web - VERSION SIMPLIFICADA
+Herramienta de búsqueda web usando Tavily
 """
 from typing import List, Dict, Any, Optional
 import os

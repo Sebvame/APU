@@ -1,5 +1,5 @@
 """
-Configuración central para APU (Apuntes IA) - VERSIÓN MEJORADA
+Configuración central para APU
 """
 import os
 from pathlib import Path

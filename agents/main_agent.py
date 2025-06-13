@@ -1,5 +1,5 @@
 """
-Agente principal mejorado con mejor manejo de contexto y timeouts
+Agente principal con manejo de contexto y timeouts
 """
 from typing import List, Dict, Any, Optional
 import requests

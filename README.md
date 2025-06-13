@@ -32,10 +32,7 @@ git clone https://github.com/tu-usuario/APU.git
 cd APU
 ```
 
-2. **Ejecuta el instalador**
-```bash
-python setup.py
-```
+
 
 El instalador:
 - ✅ Verificará tu entorno
@@ -43,7 +40,7 @@ El instalador:
 - ✅ Configurará las variables de entorno
 - ✅ Descargará el modelo Llama 3.2:3b
 
-3. **Configura Tavily (opcional)**
+1. **Configura Tavily (opcional)**
 
 Para búsquedas web, obtén una API key gratuita en [tavily.com](https://tavily.com) y agrégala al archivo `.env`:
 ```

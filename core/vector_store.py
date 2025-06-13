@@ -1,5 +1,6 @@
 """
 Almacén vectorial mejorado usando FAISS para APU
+#         Codifica un lote de textos
 """
 import faiss
 import numpy as np

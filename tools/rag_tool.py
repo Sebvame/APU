@@ -1,5 +1,5 @@
 """
-Herramienta RAG para búsqueda en documentos - VERSION SIMPLIFICADA
+Herramienta RAG para búsqueda en documentos
 """
 from typing import List, Dict, Any, Optional
 
