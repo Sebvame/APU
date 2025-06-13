@@ -1,0 +1,36 @@
+# Core dependencies
+streamlit==1.32.0
+langchain==0.1.17
+langchain-community==0.0.38
+langchain-experimental==0.0.58
+
+# Document processing
+PyPDF2==3.0.1
+pdfplumber==0.11.0
+python-magic==0.4.27
+
+# Embeddings and vector store
+sentence-transformers==2.5.1
+faiss-cpu==1.8.0
+numpy==1.24.3
+
+# Web search
+tavily-python==0.3.0
+
+# LLM integration
+ollama==0.1.8
+
+# Utilities
+python-dotenv==1.0.0
+pandas==2.0.3
+Pillow==10.2.0
+beautifulsoup4==4.12.3
+requests==2.31.0
+
+# UI enhancements
+streamlit-chat==0.1.1
+streamlit-extras==0.4.0
+
+# Development tools
+black==24.2.0
+pylint==3.1.0
