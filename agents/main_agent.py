@@ -189,6 +189,7 @@ class APUAgent:
             
             # Buscar en documentos primero
             search_results = self.rag_tool.run(message)
+            logger.info(f"Resultados de búsqueda obtenidos: {search_results}...")
             
             # Construir prompt optimizado
             prompt = self._build_optimized_prompt(message, search_results)
@@ -241,9 +242,10 @@ class APUAgent:
         
         # Extraer información clave de los resultados
         key_info = self._extract_key_information(search_results)
-        
+        logger.info(f"Información clave extraída: {key_info}...")
         prompt = f"""Eres APU, un asistente académico especializado. Analiza la información y responde de forma clara y estructurada.
 
+HISTORIAL DE CONVERSACIÓN:
 {history_context}
 
 INFORMACIÓN ENCONTRADA:
@@ -252,11 +254,12 @@ INFORMACIÓN ENCONTRADA:
 PREGUNTA: {user_message}
 
 INSTRUCCIONES:
-1. Responde basándote SOLO en la información proporcionada
+1. Responde basándote SOLO en la información proporcionada de los documentos
 2. Si es una definición, comienza con una explicación clara
 3. Usa formato markdown para organizar la respuesta
 4. Incluye ejemplos si están disponibles
 5. Mantén un tono académico pero accesible
+6. Prioriza la información encontrada en los documentos sobre el historial de conversación
 
 RESPUESTA:"""
         
