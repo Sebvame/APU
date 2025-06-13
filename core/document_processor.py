@@ -1,5 +1,5 @@
 """
-Procesador de documentos PDF para APU
+Procesador de documentos PDF para APU - CORREGIDO
 """
 import os
 from pathlib import Path
@@ -9,11 +9,11 @@ import pdfplumber
 from datetime import datetime
 import re
 
-from config.settings import DOCUMENT_CONFIG, PROCESSED_DIR, IEEE_METADATA_FIELDS
+from config.settings import DOCUMENT_CONFIG, PROCESSED_DIR, DOCUMENT_METADATA_FIELDS
 from utils.logger import logger
 from utils.helpers import (
     generate_document_id,
-    extract_ieee_metadata,
+    extract_metadata_smart,
     clean_text,
     save_json,
     get_file_info
@@ -50,8 +50,8 @@ class DocumentProcessor:
             # Obtener información del archivo
             file_info = get_file_info(pdf_path)
             
-            # Extraer metadata IEEE
-            metadata = extract_ieee_metadata(text)
+            # Extraer metadata inteligente
+            metadata = extract_metadata_smart(text, pdf_path.name)
             metadata.update({
                 "file_name": pdf_path.name,
                 "file_path": str(pdf_path),
@@ -60,11 +60,14 @@ class DocumentProcessor:
                 "file_info": file_info
             })
             
-            # Generar ID único
+            # Generar ID único - FIX: Asegurar que se genera correctamente
             doc_id = generate_document_id(text, pdf_path.name)
+            if not doc_id:
+                # Fallback si falla la generación
+                doc_id = f"doc_{pdf_path.stem}_{int(datetime.now().timestamp())}"
             
             # Crear chunks con contexto
-            chunks = self._create_smart_chunks(text, pages_content, metadata)
+            chunks = self._create_smart_chunks(text, pages_content, metadata, doc_id)
             
             # Resultado final
             result = {
@@ -162,9 +165,16 @@ class DocumentProcessor:
         
         return "\n".join(lines)
     
-    def _create_smart_chunks(self, text: str, pages_content: List[Dict], metadata: Dict) -> List[Dict[str, Any]]:
+    def _create_smart_chunks(self, text: str, pages_content: List[Dict], 
+                           metadata: Dict, doc_id: str) -> List[Dict[str, Any]]:
         """
         Crea chunks inteligentes preservando contexto y estructura
+        
+        Args:
+            text: Texto completo del documento
+            pages_content: Contenido de páginas
+            metadata: Metadata del documento
+            doc_id: ID del documento
         """
         chunks = []
         
@@ -182,10 +192,11 @@ class DocumentProcessor:
             # Crear chunks para esta sección
             if len(section_text) <= self.chunk_size:
                 # Sección pequeña, un solo chunk
+                chunk_id = f"{doc_id}_chunk_{len(chunks)}"
                 chunks.append({
                     "content": section_text,
                     "metadata": section_metadata,
-                    "chunk_id": f"{metadata['doc_id']}_{len(chunks)}",
+                    "chunk_id": chunk_id,
                     "position": len(chunks)
                 })
             else:
@@ -199,10 +210,11 @@ class DocumentProcessor:
                         "total_chunks_in_section": len(section_chunks)
                     }
                     
+                    chunk_id = f"{doc_id}_chunk_{len(chunks)}"
                     chunks.append({
                         "content": chunk_text,
                         "metadata": chunk_metadata,
-                        "chunk_id": f"{metadata['doc_id']}_{len(chunks)}",
+                        "chunk_id": chunk_id,
                         "position": len(chunks)
                     })
         
@@ -210,10 +222,11 @@ class DocumentProcessor:
         if not chunks:
             simple_chunks = self._split_text_into_chunks(text)
             for i, chunk_text in enumerate(simple_chunks):
+                chunk_id = f"{doc_id}_chunk_{i}"
                 chunks.append({
                     "content": chunk_text,
                     "metadata": metadata,
-                    "chunk_id": f"{metadata['doc_id']}_{i}",
+                    "chunk_id": chunk_id,
                     "position": i
                 })
         
@@ -233,6 +246,8 @@ class DocumentProcessor:
             r'^(?P<title>(?:ABSTRACT|INTRODUCTION|BACKGROUND|METHODS?|METHODOLOGY|RESULTS?|DISCUSSION|CONCLUSION|REFERENCES|ACKNOWLEDGMENTS?))$',
             # Título con formato
             r'^(?P<title>(?:Abstract|Introduction|Background|Methods?|Methodology|Results?|Discussion|Conclusion|References|Acknowledgments?))(?:\s|$)',
+            # Secciones de apuntes
+            r'^(?P<title>(?:RESPUESTAS|QUIZ|REPASO|EJERCICIOS?|PROBLEMAS?|TEORIA|PRACTICA))(?:\s|$)',
         ]
         
         lines = text.split('\n')
@@ -364,9 +379,12 @@ class DocumentProcessor:
     
     def _save_processed_document(self, document: Dict[str, Any]) -> None:
         """Guarda documento procesado"""
-        output_path = PROCESSED_DIR / f"{document['doc_id']}.json"
-        save_json(document, output_path)
-        logger.info(f"Documento guardado: {output_path}")
+        try:
+            output_path = PROCESSED_DIR / f"{document['doc_id']}.json"
+            save_json(document, output_path)
+            logger.info(f"Documento guardado: {output_path}")
+        except Exception as e:
+            logger.error(f"Error guardando documento procesado: {e}")
     
     def process_directory(self, directory: Path) -> List[Dict[str, Any]]:
         """

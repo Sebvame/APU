@@ -1,38 +1,28 @@
 """
-Herramienta RAG para búsqueda en documentos
+Herramienta RAG para búsqueda en documentos - VERSION SIMPLIFICADA
 """
 from typing import List, Dict, Any, Optional
-from langchain.tools import BaseTool
-from pydantic import BaseModel, Field
 
 from core.embeddings import EmbeddingsManager
 from core.vector_store import VectorStore
-from config.settings import SEARCH_CONFIG, SYSTEM_PROMPTS
+from config.settings import SEARCH_CONFIG
 from utils.logger import logger
 from utils.helpers import format_source_citation, truncate_text
 
-class RAGSearchInput(BaseModel):
-    """Schema de entrada para la herramienta RAG"""
-    query: str = Field(description="Consulta de búsqueda en los documentos")
-    top_k: Optional[int] = Field(default=5, description="Número de resultados a retornar")
-    filter_metadata: Optional[Dict[str, Any]] = Field(default=None, description="Filtros de metadata")
-
-class RAGTool(BaseTool):
-    """Herramienta para búsqueda en documentos usando RAG"""
-    
-    name = "search_documents"
-    description = """Busca información en los documentos académicos disponibles. 
-    Úsala cuando necesites encontrar información específica de los apuntes.
-    Retorna los fragmentos más relevantes con sus fuentes."""
-    args_schema = RAGSearchInput
+class RAGTool:
+    """Herramienta para búsqueda en documentos usando RAG - Versión Simplificada"""
     
     def __init__(self, embeddings_manager: EmbeddingsManager, vector_store: VectorStore):
-        super().__init__()
+        self.name = "search_documents"
+        self.description = """Busca información en los documentos académicos disponibles. 
+        Úsala cuando necesites encontrar información específica de los apuntes.
+        Retorna los fragmentos más relevantes con sus fuentes."""
+        
         self.embeddings_manager = embeddings_manager
         self.vector_store = vector_store
         logger.info("Herramienta RAG inicializada")
     
-    def _run(self, query: str, top_k: Optional[int] = None, 
+    def run(self, query: str, top_k: Optional[int] = None, 
              filter_metadata: Optional[Dict[str, Any]] = None) -> str:
         """
         Ejecuta la búsqueda RAG
@@ -70,11 +60,6 @@ class RAGTool(BaseTool):
         except Exception as e:
             logger.error(f"Error en búsqueda RAG: {e}")
             return f"Error al buscar en los documentos: {str(e)}"
-    
-    async def _arun(self, query: str, top_k: Optional[int] = None,
-                    filter_metadata: Optional[Dict[str, Any]] = None) -> str:
-        """Versión asíncrona (usa la versión síncrona)"""
-        return self._run(query, top_k, filter_metadata)
     
     def _format_results(self, results: List[Dict[str, Any]], query: str) -> str:
         """

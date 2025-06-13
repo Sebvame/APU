@@ -7,6 +7,11 @@ from pathlib import Path
 import time
 from datetime import datetime
 import os
+import warnings
+
+# Suprimir warnings de torch y huggingface
+warnings.filterwarnings("ignore", category=UserWarning, module="torch")
+warnings.filterwarnings("ignore", category=UserWarning, module="huggingface_hub")
 
 # Configuración de página debe ser lo primero
 st.set_page_config(
@@ -48,6 +53,7 @@ def init_session_state():
         st.session_state.embeddings_manager = None
         st.session_state.show_sources = True
         st.session_state.current_sources = []
+        st.session_state.web_search_enabled = False  # Nueva opción
 
 @st.cache_resource
 def initialize_system():
@@ -137,6 +143,18 @@ def process_documents(uploaded_files, system_components):
     
     return False
 
+def detect_web_search_intent(message: str) -> bool:
+    """Detecta si el usuario quiere buscar en internet"""
+    web_keywords = [
+        "buscar en internet", "busca en internet", "búsqueda web", "buscar web",
+        "buscar online", "información actualizada", "noticias recientes", 
+        "últimas noticias", "información actual", "buscar google",
+        "search web", "web search", "internet search"
+    ]
+    
+    message_lower = message.lower()
+    return any(keyword in message_lower for keyword in web_keywords)
+
 def main():
     """Función principal de la aplicación"""
     # Inicializar estado
@@ -145,6 +163,11 @@ def main():
     # CSS personalizado para estilo NotebookLM
     st.markdown("""
     <style>
+    /* Suprimir warnings de torch */
+    .stAlert[data-testid="stAlert"] {
+        display: none;
+    }
+    
     /* Estilo general */
     .stApp {
         background-color: #0a0a0a;
@@ -262,6 +285,16 @@ def main():
         st.markdown("### ⚙️ Opciones")
         st.session_state.show_sources = st.checkbox("Mostrar fuentes", value=True)
         
+        # Opción de búsqueda web
+        st.session_state.web_search_enabled = st.checkbox(
+            "🌐 Permitir búsqueda web", 
+            value=False,
+            help="Permite que APU busque en internet cuando sea necesario"
+        )
+        
+        if st.session_state.web_search_enabled:
+            st.info("💡 **Tip**: Para buscar en internet, usa frases como 'buscar en internet' o 'información actualizada'")
+        
         # Exportar conversación
         if st.session_state.messages:
             st.markdown("### 💾 Exportar")
@@ -304,14 +337,19 @@ def main():
                                 if source["type"] == "document":
                                     st.markdown(f"📄 **{source['title']}**")
                                 elif source["type"] == "web":
-                                    st.markdown(f"🌐 [{source['url']}]({source['url']})")
+                                    st.markdown(f"🌐 [{source.get('url', 'Búsqueda web')}]({source.get('url', '#')})")
     
     # Input del usuario
     if prompt := st.chat_input("Escribe tu pregunta aquí...", disabled=not st.session_state.initialized):
-        # Verificar si hay documentos cargados
+        # Verificar si hay documentos cargados (solo para búsqueda local)
         if not st.session_state.documents_loaded and st.session_state.vector_store.get_stats()["total_documents"] == 0:
-            st.warning("⚠️ No hay documentos cargados. Por favor, carga algunos PDFs primero.")
-            return
+            # Verificar si es una búsqueda web
+            if detect_web_search_intent(prompt) and st.session_state.web_search_enabled:
+                # Permitir búsqueda web sin documentos
+                pass
+            else:
+                st.warning("⚠️ No hay documentos cargados. Por favor, carga algunos PDFs primero o activa la búsqueda web.")
+                return
         
         # Agregar mensaje del usuario
         st.session_state.messages.append({"role": "user", "content": prompt})
@@ -334,62 +372,76 @@ def main():
             
             with st.spinner("Pensando..."):
                 try:
-                    # Ejecutar agente
-                    response = st.session_state.agent.chat(prompt, st.session_state.session_id)
+                    # Detectar si necesita búsqueda web
+                    use_web_search = (
+                        st.session_state.web_search_enabled and 
+                        detect_web_search_intent(prompt)
+                    )
+                    
+                    if use_web_search:
+                        # Mostrar que está buscando en internet
+                        message_placeholder.markdown("🌐 Buscando en internet...")
+                        
+                        # Realizar búsqueda web
+                        web_results = st.session_state.agent.search_web(prompt)
+                        
+                        # Actualizar respuesta con resultados web
+                        full_response = f"## Búsqueda en Internet\n\n{web_results}"
+                        
+                        sources = [{"type": "web", "url": "Internet search results"}]
+                        
+                        # Metadatos para memoria
+                        metadata = {"tool_used": "web_search"}
+                        
+                    else:
+                        # Búsqueda normal en documentos
+                        response = st.session_state.agent.chat(prompt, st.session_state.session_id)
+                        full_response = response["answer"]
+                        sources = response.get("sources", [])
+                        metadata = {"tool_used": "search_documents"}
                     
                     # Mostrar respuesta
-                    full_response = response["answer"]
                     message_placeholder.markdown(full_response)
-                    
-                    # Extraer documentos accedidos
-                    docs_accessed = set()
-                    for step in response.get("intermediate_steps", []):
-                        if len(step) >= 2 and step[0].tool == "search_documents":
-                            # Extraer doc_ids del resultado
-                            # Esto es una simplificación, en producción parsear mejor
-                            docs_accessed.add("document")
                     
                     # Guardar respuesta en memoria
                     st.session_state.memory_manager.add_message(
                         st.session_state.session_id,
                         "assistant",
                         full_response,
-                        metadata={
-                            "documents_accessed": list(docs_accessed),
-                            "tool_used": "search_documents" if docs_accessed else None
-                        }
+                        metadata=metadata
                     )
                     
                     # Guardar mensaje en estado
                     message_data = {
                         "role": "assistant",
                         "content": full_response,
-                        "sources": response.get("sources", [])
+                        "sources": sources
                     }
                     st.session_state.messages.append(message_data)
                     
                     # Mostrar fuentes
-                    if st.session_state.show_sources and response.get("sources"):
+                    if st.session_state.show_sources and sources:
                         with sources_placeholder.expander("📚 Fuentes consultadas", expanded=True):
-                            for source in response["sources"]:
+                            for source in sources:
                                 if source["type"] == "document":
                                     st.markdown(f"📄 **{source['title']}**")
                                 elif source["type"] == "web":
-                                    st.markdown(f"🌐 [{source['url']}]({source['url']})")
+                                    st.markdown(f"🌐 **Búsqueda en Internet**")
                     
-                    # Generar preguntas de seguimiento
-                    followup_questions = st.session_state.agent.generate_followup_questions(
-                        full_response, prompt
-                    )
-                    
-                    if followup_questions:
-                        st.markdown("---")
-                        st.markdown("**💡 Preguntas sugeridas:**")
-                        for q in followup_questions:
-                            if st.button(f"❓ {q}", key=f"followup_{hash(q)}"):
-                                # Simular nuevo prompt
-                                st.session_state.messages.append({"role": "user", "content": q})
-                                st.rerun()
+                    # Generar preguntas de seguimiento solo para búsquedas en documentos
+                    if not use_web_search:
+                        followup_questions = st.session_state.agent.generate_followup_questions(
+                            full_response, prompt
+                        )
+                        
+                        if followup_questions:
+                            st.markdown("---")
+                            st.markdown("**💡 Preguntas sugeridas:**")
+                            for q in followup_questions:
+                                if st.button(f"❓ {q}", key=f"followup_{hash(q)}"):
+                                    # Simular nuevo prompt
+                                    st.session_state.messages.append({"role": "user", "content": q})
+                                    st.rerun()
                 
                 except Exception as e:
                     error_msg = f"❌ Error: {str(e)}"
@@ -413,7 +465,10 @@ def main():
         if st.session_state.session_id:
             st.markdown(f"**Sesión**: `{st.session_state.session_id[:8]}...`")
     with col3:
-        st.markdown(f"**Modelo**: {st.session_state.agent.llm.model if st.session_state.agent else 'No inicializado'}")
+        if st.session_state.agent:
+            st.markdown(f"**Modelo**: {st.session_state.agent.llm.model}")
+        else:
+            st.markdown("**Modelo**: No inicializado")
 
 if __name__ == "__main__":
     main()

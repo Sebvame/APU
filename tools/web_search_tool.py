@@ -1,9 +1,7 @@
 """
-Herramienta de búsqueda web usando Tavily
+Herramienta de búsqueda web - VERSION SIMPLIFICADA
 """
 from typing import List, Dict, Any, Optional
-from langchain.tools import BaseTool
-from pydantic import BaseModel, Field
 import os
 
 from config.settings import TAVILY_CONFIG
@@ -17,23 +15,16 @@ except ImportError:
     TAVILY_AVAILABLE = False
     logger.warning("Tavily no está disponible. Instala tavily-python para usar búsquedas web.")
 
-class WebSearchInput(BaseModel):
-    """Schema de entrada para búsqueda web"""
-    query: str = Field(description="Consulta de búsqueda en internet")
-    max_results: Optional[int] = Field(default=5, description="Número máximo de resultados")
-
-class WebSearchTool(BaseTool):
-    """Herramienta para búsqueda en internet usando Tavily"""
-    
-    name = "web_search"
-    description = """Busca información actualizada en internet. 
-    Úsala SOLO cuando el usuario solicite explícitamente buscar en internet o 
-    cuando necesites información que no está en los documentos locales.
-    NO la uses por defecto."""
-    args_schema = WebSearchInput
+class WebSearchTool:
+    """Herramienta para búsqueda en internet usando Tavily - Versión Simplificada"""
     
     def __init__(self):
-        super().__init__()
+        self.name = "web_search"
+        self.description = """Busca información actualizada en internet. 
+        Úsala SOLO cuando el usuario solicite explícitamente buscar en internet o 
+        cuando necesites información que no está en los documentos locales.
+        NO la uses por defecto."""
+        
         self.api_key = TAVILY_CONFIG.get("api_key", "")
         self.client = None
         
@@ -50,7 +41,7 @@ class WebSearchTool(BaseTool):
             if not self.api_key:
                 logger.warning("API key de Tavily no configurada")
     
-    def _run(self, query: str, max_results: Optional[int] = None) -> str:
+    def run(self, query: str, max_results: Optional[int] = None) -> str:
         """
         Ejecuta búsqueda web
         
@@ -89,10 +80,6 @@ class WebSearchTool(BaseTool):
         except Exception as e:
             logger.error(f"Error en búsqueda web: {e}")
             return f"Error al realizar búsqueda web: {str(e)}"
-    
-    async def _arun(self, query: str, max_results: Optional[int] = None) -> str:
-        """Versión asíncrona"""
-        return self._run(query, max_results)
     
     def _format_results(self, results: List[Dict[str, Any]], query: str) -> str:
         """
@@ -181,7 +168,7 @@ class WebSearchTool(BaseTool):
         # Agregar términos académicos a la búsqueda
         academic_query = f"{query} academic paper research IEEE ACM scholar"
         
-        return self._run(academic_query)
+        return self.run(academic_query)
     
     def fact_check(self, statement: str) -> str:
         """
@@ -195,7 +182,7 @@ class WebSearchTool(BaseTool):
         """
         fact_check_query = f"fact check verify {statement}"
         
-        results = self._run(fact_check_query, max_results=3)
+        results = self.run(fact_check_query, max_results=3)
         
         # Agregar contexto
         formatted = f"🔍 **Verificación de hechos**:\n\n"
@@ -218,7 +205,7 @@ class WebSearchTool(BaseTool):
         # Agregar filtros de tiempo a la búsqueda
         time_query = f"{topic} latest recent news updates {days} days"
         
-        results = self._run(time_query)
+        results = self.run(time_query)
         
         # Formatear con contexto temporal
         formatted = f"📅 **Información reciente sobre**: {topic}\n"

@@ -1,36 +1,25 @@
-# Core dependencies
-streamlit==1.32.0
-langchain==0.1.17
-langchain-community==0.0.38
-langchain-experimental==0.0.58
+# Core dependencies with Python 3.12 compatibility
+streamlit>=1.29.0
+langchain>=0.1.0
+langchain-community>=0.0.20
 
-# Document processing
-PyPDF2==3.0.1
-pdfplumber==0.11.0
-python-magic==0.4.27
+# ML and Vector processing - Python 3.12 compatible versions
+sentence-transformers>=2.2.2
+numpy>=1.26.0
+torch>=2.1.0
+faiss-cpu>=1.7.4
 
-# Embeddings and vector store
-sentence-transformers==2.5.1
-faiss-cpu==1.8.0
-numpy==1.24.3
-
-# Web search
-tavily-python==0.3.0
-
-# LLM integration
-ollama==0.1.8
+# PDF processing
+PyPDF2>=3.0.0
+pdfplumber>=0.10.0
 
 # Utilities
-python-dotenv==1.0.0
-pandas==2.0.3
-Pillow==10.2.0
-beautifulsoup4==4.12.3
-requests==2.31.0
+python-dotenv>=1.0.0
+pathlib2
+requests>=2.31.0
 
-# UI enhancements
-streamlit-chat==0.1.1
-streamlit-extras==0.4.0
+# Optional: Web search (install manually if needed)
+tavily-python>=0.3.0
 
-# Development tools
-black==24.2.0
-pylint==3.1.0
+# Ollama client
+# ollama>=0.1.0

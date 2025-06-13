@@ -1,139 +1,72 @@
 """
-Agente principal de APU que orquesta las herramientas
+Agente principal de APU simplificado (sin LangChain agents)
 """
 from typing import List, Dict, Any, Optional
-from langchain.agents import AgentExecutor, create_react_agent
-from langchain.prompts import PromptTemplate
-from langchain.schema import BaseMessage
-from langchain_community.llms import Ollama
-from langchain.memory import ConversationBufferWindowMemory
-from langchain.callbacks import StreamingStdOutCallbackHandler
+import requests
+import json
 
-from config.settings import OLLAMA_CONFIG, SYSTEM_PROMPTS, UI_CONFIG
-from tools.rag_tool import RAGTool
-from tools.web_search_tool import WebSearchTool
+from config.settings import OLLAMA_CONFIG, SYSTEM_PROMPTS
 from utils.logger import logger
 
-class APUAgent:
-    """Agente principal de APU"""
+class SimpleOllamaClient:
+    """Cliente simplificado para Ollama"""
     
-    def __init__(self, rag_tool: RAGTool, web_search_tool: WebSearchTool):
+    def __init__(self):
+        self.base_url = OLLAMA_CONFIG["host"]
+        self.model = OLLAMA_CONFIG["model"]
+        self.temperature = OLLAMA_CONFIG["temperature"]
+        self.max_tokens = OLLAMA_CONFIG["max_tokens"]
+        
+        # Verificar conexión
+        try:
+            response = requests.get(f"{self.base_url}/api/version", timeout=5)
+            if response.status_code == 200:
+                logger.info(f"Conectado a Ollama: {self.base_url}")
+            else:
+                raise Exception(f"Ollama no responde: {response.status_code}")
+        except Exception as e:
+            logger.error(f"Error conectando a Ollama: {e}")
+            raise RuntimeError(f"No se pudo conectar con Ollama en {self.base_url}")
+    
+    def invoke(self, prompt: str) -> str:
+        """Invoca el modelo Ollama"""
+        try:
+            payload = {
+                "model": self.model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": self.temperature,
+                    "num_predict": self.max_tokens
+                }
+            }
+            
+            response = requests.post(
+                f"{self.base_url}/api/generate",
+                json=payload,
+                timeout=OLLAMA_CONFIG["timeout"]
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                return result.get("response", "")
+            else:
+                raise Exception(f"Error en Ollama: {response.status_code}")
+                
+        except Exception as e:
+            logger.error(f"Error invocando Ollama: {e}")
+            return f"Error: {str(e)}"
+
+class APUAgent:
+    """Agente principal de APU simplificado"""
+    
+    def __init__(self, rag_tool, web_search_tool):
         self.rag_tool = rag_tool
         self.web_search_tool = web_search_tool
+        self.llm = SimpleOllamaClient()
+        self.conversation_history = []
         
-        # Inicializar LLM
-        self.llm = self._initialize_llm()
-        
-        # Crear prompt del agente
-        self.prompt = self._create_agent_prompt()
-        
-        # Inicializar memoria
-        self.memory = ConversationBufferWindowMemory(
-            k=UI_CONFIG["max_chat_history"],
-            return_messages=True,
-            memory_key="chat_history"
-        )
-        
-        # Crear agente
-        self.agent = self._create_agent()
-        
-        logger.info("Agente APU inicializado")
-    
-    def _initialize_llm(self) -> Ollama:
-        """Inicializa el modelo Ollama"""
-        try:
-            llm = Ollama(
-                base_url=OLLAMA_CONFIG["host"],
-                model=OLLAMA_CONFIG["model"],
-                temperature=OLLAMA_CONFIG["temperature"],
-                num_predict=OLLAMA_CONFIG["max_tokens"],
-                timeout=OLLAMA_CONFIG["timeout"],
-                callbacks=[StreamingStdOutCallbackHandler()],
-                verbose=True
-            )
-            
-            # Verificar conexión
-            llm.invoke("test")
-            logger.info(f"LLM inicializado: {OLLAMA_CONFIG['model']}")
-            
-            return llm
-            
-        except Exception as e:
-            logger.error(f"Error inicializando LLM: {e}")
-            raise RuntimeError(
-                f"No se pudo conectar con Ollama en {OLLAMA_CONFIG['host']}. "
-                "Asegúrate de que Ollama esté ejecutándose."
-            )
-    
-    def _create_agent_prompt(self) -> PromptTemplate:
-        """Crea el prompt del agente"""
-        template = """
-{system_prompt}
-
-Historial de conversación:
-{chat_history}
-
-Herramientas disponibles:
-{tools}
-
-Nombres de herramientas: {tool_names}
-
-Instrucciones importantes:
-1. SIEMPRE usa la herramienta search_documents primero para buscar en los documentos locales
-2. SOLO usa web_search si el usuario lo solicita explícitamente o si no encuentras información en los documentos
-3. Proporciona respuestas detalladas basándote en la información encontrada
-4. Cita las fuentes cuando proporciones información
-5. Si no encuentras información relevante, indícalo claramente
-
-Formato de respuesta:
-Debes responder siguiendo este formato EXACTO:
-
-Question: la pregunta del usuario
-Thought: qué necesitas hacer
-Action: el nombre de la herramienta a usar
-Action Input: el input para la herramienta
-Observation: el resultado de la herramienta
-... (este patrón Thought/Action/Action Input/Observation puede repetirse N veces)
-Thought: Ya tengo la información necesaria
-Final Answer: la respuesta final detallada para el usuario
-
-Pregunta del usuario: {input}
-{agent_scratchpad}
-"""
-        
-        return PromptTemplate(
-            template=template,
-            input_variables=["system_prompt", "chat_history", "tools", "tool_names", "input", "agent_scratchpad"],
-            partial_variables={
-                "system_prompt": SYSTEM_PROMPTS["main_agent"]
-            }
-        )
-    
-    def _create_agent(self) -> AgentExecutor:
-        """Crea el agente ejecutor"""
-        # Lista de herramientas
-        tools = [self.rag_tool, self.web_search_tool]
-        
-        # Crear agente ReAct
-        agent = create_react_agent(
-            llm=self.llm,
-            tools=tools,
-            prompt=self.prompt
-        )
-        
-        # Crear ejecutor
-        agent_executor = AgentExecutor(
-            agent=agent,
-            tools=tools,
-            memory=self.memory,
-            verbose=True,
-            max_iterations=5,
-            early_stopping_method="generate",
-            handle_parsing_errors=True,
-            return_intermediate_steps=True
-        )
-        
-        return agent_executor
+        logger.info("Agente APU simplificado inicializado")
     
     def chat(self, message: str, session_id: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -141,7 +74,7 @@ Pregunta del usuario: {input}
         
         Args:
             message: Mensaje del usuario
-            session_id: ID de sesión para mantener contexto
+            session_id: ID de sesión
             
         Returns:
             Respuesta del agente
@@ -149,16 +82,30 @@ Pregunta del usuario: {input}
         try:
             logger.info(f"Procesando mensaje: {message[:100]}...")
             
-            # Ejecutar agente
-            response = self.agent.invoke({
-                "input": message
+            # Buscar en documentos primero
+            search_results = self.rag_tool.run(message)
+            
+            # Construir prompt para el LLM
+            prompt = self._build_prompt(message, search_results)
+            
+            # Generar respuesta
+            response = self.llm.invoke(prompt)
+            
+            # Agregar a historial
+            self.conversation_history.append({
+                "user": message,
+                "assistant": response,
+                "sources": [{"type": "document", "title": "Documentos locales"}]
             })
             
-            # Extraer información relevante
+            # Mantener solo las últimas 10 conversaciones
+            if len(self.conversation_history) > 10:
+                self.conversation_history = self.conversation_history[-10:]
+            
             result = {
-                "answer": response.get("output", ""),
-                "intermediate_steps": response.get("intermediate_steps", []),
-                "sources": self._extract_sources(response),
+                "answer": response,
+                "intermediate_steps": [("search_documents", search_results)],
+                "sources": [{"type": "document", "title": "Documentos locales"}],
                 "session_id": session_id
             }
             
@@ -174,8 +121,96 @@ Pregunta del usuario: {input}
                 "error": str(e)
             }
     
-    def _extract_sources(self, response: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Extrae las fuentes usadas en la respuesta"""
-        sources = []
+    def _build_prompt(self, user_message: str, search_results: str) -> str:
+        """Construye el prompt para el LLM"""
         
-        #
+        # Contexto del historial
+        history_context = ""
+        if self.conversation_history:
+            history_context = "\n\nHistorial reciente:\n"
+            for conv in self.conversation_history[-3:]:  # Solo últimas 3
+                history_context += f"Usuario: {conv['user']}\n"
+                history_context += f"APU: {conv['assistant']}\n\n"
+        
+        prompt = f"""
+{SYSTEM_PROMPTS["main_agent"]}
+
+{history_context}
+
+Información encontrada en los documentos:
+{search_results}
+
+Pregunta del usuario: {user_message}
+
+Instrucciones:
+1. Basa tu respuesta en la información encontrada en los documentos
+2. Si la información no es suficiente, indícalo claramente
+3. Mantén un tono académico pero accesible
+4. Estructura tu respuesta de forma clara
+5. Cita las fuentes cuando sea relevante
+
+Respuesta:
+"""
+        
+        return prompt
+    
+    def search_web(self, query: str) -> str:
+        """Busca en internet (funcionalidad opcional)"""
+        try:
+            # Realizar búsqueda web
+            web_results = self.web_search_tool.run(query)
+            
+            # Si hay resultados, construir prompt para el LLM
+            if "❌" not in web_results and "Error" not in web_results:
+                prompt = f"""
+{SYSTEM_PROMPTS["main_agent"]}
+
+El usuario ha solicitado una búsqueda en internet sobre: {query}
+
+Resultados de la búsqueda web:
+{web_results}
+
+Instrucciones:
+1. Analiza y resume la información encontrada en internet
+2. Presenta la información de manera clara y organizada
+3. Mantén un tono informativo pero advierte sobre la veracidad
+4. Incluye las fuentes mencionadas
+
+Respuesta basada en búsqueda web:
+"""
+                
+                # Generar respuesta procesada por el LLM
+                processed_response = self.llm.invoke(prompt)
+                
+                # Combinar respuesta del LLM con resultados originales
+                return f"{processed_response}\n\n---\n\n**Resultados detallados:**\n{web_results}"
+            else:
+                # Si hay error en la búsqueda, devolver el mensaje original
+                return web_results
+                
+        except Exception as e:
+            logger.error(f"Error en búsqueda web: {e}")
+            return f"Error al realizar búsqueda web: {str(e)}"
+    
+    def clear_memory(self):
+        """Limpia la memoria de conversación"""
+        self.conversation_history = []
+        logger.info("Memoria de conversación limpiada")
+    
+    def generate_followup_questions(self, response: str, original_query: str) -> List[str]:
+        """Genera preguntas de seguimiento"""
+        # Implementación simple
+        questions = [
+            "¿Podrías explicar esto con más detalle?",
+            "¿Hay ejemplos prácticos relacionados?",
+            "¿Qué otros aspectos debería considerar?"
+        ]
+        return questions[:2]  # Solo 2 preguntas
+    
+    def get_conversation_summary(self) -> Dict[str, Any]:
+        """Obtiene resumen de la conversación"""
+        return {
+            "total_messages": len(self.conversation_history),
+            "recent_topics": [conv["user"][:50] + "..." for conv in self.conversation_history[-3:]],
+            "tools_used": ["search_documents"]
+        }

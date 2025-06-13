@@ -1,5 +1,5 @@
 """
-Configuración central para APU (Apuntes IA)
+Configuración central para APU (Apuntes IA) - VERSIÓN MEJORADA
 """
 import os
 from pathlib import Path
@@ -50,11 +50,27 @@ DOCUMENT_CONFIG = {
     "min_chunk_size": 100,
 }
 
-# Configuración de búsqueda
+# Configuración de búsqueda MEJORADA
 SEARCH_CONFIG = {
-    "max_results": int(os.getenv("MAX_SEARCH_RESULTS", "5")),
-    "similarity_threshold": 0.5,
+    "max_results": int(os.getenv("MAX_SEARCH_RESULTS", "8")),  # Aumentado de 5 a 8
+    "similarity_threshold": 0.3,  # Reducido de 0.5 a 0.3 para ser menos restrictivo
     "rerank": True,
+    "use_mmr": True,  # Maximum Marginal Relevance para diversidad
+    "mmr_lambda": 0.7,  # Balance entre relevancia y diversidad
+    "contextual_boost": {
+        "title_match": 1.3,  # Boost si coincide con título
+        "author_match": 1.2,  # Boost si coincide con autor
+        "recent_document": 1.1,  # Boost para documentos recientes
+        "section_relevance": {
+            "abstract": 1.4,
+            "introduction": 1.2,
+            "conclusion": 1.3,
+            "results": 1.1
+        }
+    },
+    "adaptive_threshold": True,  # Ajustar threshold según calidad de resultados
+    "min_threshold": 0.1,  # Threshold mínimo absoluto
+    "max_threshold": 0.7   # Threshold máximo
 }
 
 # Configuración de Tavily
@@ -72,23 +88,39 @@ UI_CONFIG = {
     "enable_feedback": True,
 }
 
-# Prompts del sistema
+# Prompts del sistema MEJORADOS
 SYSTEM_PROMPTS = {
     "main_agent": """Eres APU (Apuntes IA), un asistente especializado en ayudar a estudiantes 
-a consultar y entender sus apuntes académicos en formato IEEE.
+a consultar y entender sus apuntes académicos y documentos educativos.
 
 Tu objetivo es proporcionar respuestas precisas y útiles basándote en los documentos disponibles.
 
 Instrucciones:
-1. Siempre basa tus respuestas en la información de los documentos
+1. SIEMPRE basa tus respuestas en la información de los documentos
 2. Cita las fuentes específicas cuando proporciones información
 3. Si no encuentras información relevante, indícalo claramente
 4. Mantén un tono académico pero accesible
 5. Estructura tus respuestas de forma clara y organizada
+6. Adapta tu respuesta al tipo de documento (apuntes de clase, papers académicos, etc.)
+7. Incluye detalles relevantes como autores, fechas, instituciones cuando estén disponibles
 
-Herramientas disponibles:
-- search_documents: Para buscar información en los apuntes
-- web_search: Para buscar información en internet (solo cuando el usuario lo solicite explícitamente)
+Tipos de documentos que puedes encontrar:
+- Apuntes de clase
+- Papers académicos IEEE
+- Documentos de tesis
+- Material educativo general
+
+Para apuntes de clase, incluye información sobre:
+- Estudiante/autor
+- Institución educativa
+- Fecha de los apuntes
+- Tema de la clase
+
+Para papers académicos, incluye:
+- Autores
+- Abstract/resumen
+- Metodología
+- Resultados principales
 """,
     
     "rag_prompt": """Utiliza la siguiente información para responder la pregunta del usuario.
@@ -106,20 +138,24 @@ Busca información relevante y actual sobre: {query}
 Proporciona un resumen claro y cita las fuentes.""",
 }
 
-# Metadata fields para documentos IEEE
-IEEE_METADATA_FIELDS = [
-    "title",
-    "authors",
-    "date",
-    "conference",
-    "abstract",
-    "keywords",
-    "doi",
-    "pages",
-    "file_name",
-    "section",
-    "subsection",
-]
+# Metadata fields para diferentes tipos de documentos
+DOCUMENT_METADATA_FIELDS = {
+    "class_notes": [
+        "title", "authors", "date", "institution", "course", "email", 
+        "document_type", "file_name", "processed_date"
+    ],
+    "ieee_paper": [
+        "title", "authors", "date", "conference", "abstract", "keywords", 
+        "doi", "pages", "document_type", "file_name"
+    ],
+    "thesis": [
+        "title", "authors", "date", "university", "degree", "department",
+        "advisor", "abstract", "keywords", "document_type"
+    ],
+    "generic": [
+        "title", "authors", "date", "document_type", "file_name"
+    ]
+}
 
 # Logging configuration
 LOGGING_CONFIG = {
