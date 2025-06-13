@@ -27,7 +27,7 @@ APU es una aplicación avanzada de RAG (Retrieval-Augmented Generation) especial
 ### 1. Clonar el Repositorio
 
 ```bash
-git clone <url-del-repositorio>
+git clone https://github.com/Sebvame/APU.git
 cd APU
 ```
 
