@@ -27,12 +27,13 @@ APP_CONFIG = {
 }
 
 # Configuración de Ollama
+# En config/settings.py, agregar:
 OLLAMA_CONFIG = {
     "host": os.getenv("OLLAMA_HOST", "http://localhost:11434"),
-    "model": os.getenv("OLLAMA_MODEL", "llama3.2:3b"),
-    "temperature": 0.1,  # Baja temperatura para respuestas más precisas
-    "max_tokens": 2048,
-    "timeout": 60,
+    "model": os.getenv("OLLAMA_MODEL", "mistral:7b"),  # Cambiado
+    "temperature": 0.2,  # Aumentado ligeramente para creatividad
+    "max_tokens": 8184,  # Aumentado para respuestas más completas
+    "timeout": 240,      # Aumentado
 }
 
 # Configuración de embeddings
